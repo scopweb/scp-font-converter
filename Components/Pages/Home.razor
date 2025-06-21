@@ -1,0 +1,983 @@
+﻿@page "/"
+@using System.IO
+@using System.Diagnostics
+@using System.Text.Json
+@inject IJSRuntime JSRuntime
+
+<div class="hero-section">
+    <div class="hero-content">
+        <h1 class="hero-title">
+            <span class="gradient-text">Professional Font Converter</span>
+        </h1>
+        <p class="hero-subtitle">
+            Convert TTF, OTF fonts to web-optimized WOFF and WOFF2 formats using industry-standard FontTools
+        </p>
+    </div>
+</div>
+
+<div class="converter-card">
+    <div class="card-header">
+        <h3 class="card-title">Font Converter</h3>
+        <p class="card-description">Upload your font file and convert it to web-optimized formats</p>
+    </div>
+    
+    <div class="conversion-options">
+        <div class="format-selector">
+            <label class="format-option">
+                <input type="radio" name="format" value="woff" @onchange="@((e) => selectedFormat = e.Value?.ToString())" />
+                <span class="format-label">
+                    <strong>WOFF</strong>
+                    <small>Web Open Font Format</small>
+                </span>
+            </label>
+            <label class="format-option">
+                <input type="radio" name="format" value="woff2" @onchange="@((e) => selectedFormat = e.Value?.ToString())" checked />
+                <span class="format-label">
+                    <strong>WOFF2</strong>
+                    <small>Better compression</small>
+                </span>
+            </label>
+        </div>
+    </div>
+    
+    <div class="upload-section">
+        <div class="file-input-wrapper">
+            <InputFile OnChange="@HandleFileSelected" accept=".ttf,.otf" class="file-input" id="fontFile" />
+            <label for="fontFile" class="file-input-label">
+                <span class="upload-icon">📁</span>
+                <span class="upload-text">
+                    @if (selectedFile == null)
+                    {
+                        <span>Choose TTF/OTF file or drag & drop</span>
+                    }
+                    else
+                    {
+                        <span>@selectedFile.Name (@FormatFileSize(selectedFile.Size))</span>
+                    }
+                </span>
+            </label>
+        </div>
+        
+        <div class="file-info">
+            <small class="text-muted">Maximum file size: 10MB • Supported formats: TTF, OTF</small>
+        </div>
+    </div>
+
+    <div class="advanced-options">
+        <details class="options-details">
+            <summary>Advanced Options</summary>
+            <div class="options-grid">
+                <label class="checkbox-option">
+                    <input type="checkbox" @bind="enableSubset" />
+                    <span>Enable subsetting (reduce file size)</span>
+                </label>
+                <label class="checkbox-option">
+                    <input type="checkbox" @bind="removeHinting" />
+                    <span>Remove hinting (smaller size)</span>
+                </label>
+            </div>
+            @if (enableSubset)
+            {
+                <div class="subset-options">
+                    <label for="charSet">Character set to include:</label>
+                    <select @bind="characterSet" class="form-control">
+                        <option value="latin">Latin Basic (A-Z, a-z, 0-9)</option>
+                        <option value="latin-extended">Latin Extended</option>
+                        <option value="custom">Custom characters</option>
+                    </select>
+                    @if (characterSet == "custom")
+                    {
+                        <textarea @bind="customCharacters" class="form-control" placeholder="Enter custom characters..."></textarea>
+                    }
+                </div>
+            }
+        </details>
+    </div>
+
+    <div class="action-section">
+        <button class="btn btn-primary convert-btn" @onclick="ConvertFont" disabled="@(selectedFile == null || isConverting)">
+            @if (isConverting)
+            {
+                <span class="spinner"></span>
+                <span>Converting...</span>
+            }
+            else
+            {
+                <span class="convert-icon">⚡</span>
+                <span>Convert to @selectedFormat.ToUpper()</span>
+            }
+        </button>
+    </div>
+</div>
+
+@if (conversionResult != null)
+{
+    <div class="result-card @(conversionResult.Success ? "success" : "error")">
+        <div class="result-content">
+            <span class="result-icon">@(conversionResult.Success ? "✅" : "❌")</span>
+            <div class="result-text">
+                <strong>@(conversionResult.Success ? "Conversion Successful" : "Conversion Failed")</strong>
+                @if (conversionResult.Success)
+                {
+                    <p><strong>File:</strong> @conversionResult.OutputFile</p>
+                    <p><strong>Original Size:</strong> @FormatFileSize(conversionResult.InputSize)</p>
+                    <p><strong>Converted Size:</strong> @FormatFileSize(conversionResult.OutputSize)</p>
+                    <p><strong>Compression:</strong> @conversionResult.Compression saved</p>
+                    @if (conversionResult.FontInfo != null && !string.IsNullOrEmpty(conversionResult.FontInfo.Name))
+                    {
+                        <p><strong>Font:</strong> @conversionResult.FontInfo.Name (@conversionResult.FontInfo.Glyphs glyphs)</p>
+                    }
+                    
+                    <div class="download-section">
+                        <button class="btn btn-success download-btn" @onclick="DownloadFile">
+                            <span class="download-icon">⬇️</span>
+                            <span>Download @conversionResult.OutputFile</span>
+                        </button>
+                        <button class="btn btn-secondary preview-btn" @onclick="PreviewFont">
+                            <span class="preview-icon">👁️</span>
+                            <span>Preview Font</span>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <p>@conversionResult.Error</p>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@if (showPreview && conversionResult?.Success == true)
+{
+    <div class="font-preview-card">
+        <div class="preview-header">
+            <h4>Font Preview: @conversionResult.OutputFile</h4>
+            <button class="btn-close" @onclick="ClosePreview">×</button>
+        </div>
+        <div class="preview-content">
+            <div class="preview-text" style="@GetFontFamilyStyle()">
+                <h1>The quick brown fox jumps over the lazy dog</h1>
+                <h2>ABCDEFGHIJKLMNOPQRSTUVWXYZ</h2>
+                <h3>abcdefghijklmnopqrstuvwxyz</h3>
+                <h4>0123456789 !@@#$%^&*()</h4>
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="features-section">
+    <h4>Why use FontTools?</h4>
+    <div class="features-grid">
+        <div class="feature-item">
+            <span class="feature-icon">🆓</span>
+            <h5>100% Free</h5>
+            <p>Open source FontTools library, no licensing fees or limitations</p>
+        </div>
+        <div class="feature-item">
+            <span class="feature-icon">🔧</span>
+            <h5>Industry Standard</h5>
+            <p>Used by Google, Adobe, and major font foundries worldwide</p>
+        </div>
+        <div class="feature-item">
+            <span class="feature-icon">⚡</span>
+            <h5>Advanced Features</h5>
+            <p>Subsetting, optimization, and format conversion capabilities</p>
+        </div>
+        <div class="feature-item">
+            <span class="feature-icon">📦</span>
+            <h5>Better Compression</h5>
+            <p>WOFF2 provides up to 30% better compression than WOFF</p>
+        </div>
+    </div>
+</div>
+
+
+<!-- Componente de notificaciones simple -->
+@if (notifications.Any())
+{
+    <div class="notifications-container">
+        @foreach (var notification in notifications)
+        {
+            <div class="notification @notification.Type @(notification.IsVisible ? "show" : "")" @key="notification.Id">
+                <span class="notification-icon">@GetNotificationIcon(notification.Type)</span>
+                <span class="notification-message">@notification.Message</span>
+                <button class="notification-close" @onclick="() => RemoveNotification(notification.Id)">×</button>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    /* Sistema de notificaciones simple */
+    .notifications-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-width: 400px;
+    }
+
+    .notification {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.3s ease;
+        border-left: 4px solid;
+    }
+
+    .notification.show {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    .notification.success {
+        background: #d4edda;
+        color: #155724;
+        border-left-color: #28a745;
+    }
+
+    .notification.error {
+        background: #f8d7da;
+        color: #721c24;
+        border-left-color: #dc3545;
+    }
+
+    .notification.info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border-left-color: #17a2b8;
+    }
+
+    .notification-icon {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .notification-message {
+        flex: 1;
+        font-weight: 500;
+    }
+
+    .notification-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: inherit;
+        opacity: 0.7;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+    }
+
+    .notification-close:hover {
+        opacity: 1;
+        background: rgba(0,0,0,0.1);
+    }
+
+    /* Estilos previos + nuevos estilos... */
+    .download-section {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .download-btn {
+        background: linear-gradient(135deg, var(--success-color), #2d8f47);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--border-radius);
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .download-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-hover);
+    }
+
+    .preview-btn {
+        background: var(--surface-hover);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--border-radius);
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .preview-btn:hover {
+        border-color: var(--primary-color);
+        background: var(--surface-dark);
+    }
+
+    .font-preview-card {
+        background: var(--surface-dark);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 0;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+    }
+
+    .preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        background: var(--surface-hover);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .preview-header h4 {
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        transition: var(--transition);
+    }
+
+    .btn-close:hover {
+        background: var(--surface-dark);
+        color: var(--text-primary);
+    }
+
+    .preview-content {
+        padding: 2rem;
+    }
+
+    .preview-text {
+        line-height: 1.4;
+    }
+
+    .preview-text h1 {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        font-weight: 400;
+    }
+
+    .preview-text h2 {
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
+        font-weight: 600;
+        letter-spacing: 2px;
+    }
+
+    .preview-text h3 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        font-weight: 400;
+        letter-spacing: 1px;
+    }
+
+    .preview-text h4 {
+        font-size: 1.2rem;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+
+    .preview-text p {
+        font-size: 1rem;
+        line-height: 1.6;
+        color: var(--text-secondary);
+    }
+
+    /* Resto de estilos previos... */
+    .conversion-options {
+        margin-bottom: 2rem;
+    }
+
+    .format-selector {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    .format-option {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        transition: var(--transition);
+        background: var(--surface-dark);
+    }
+
+    .format-option:hover {
+        border-color: var(--primary-color);
+    }
+
+    .format-option input[type="radio"] {
+        margin: 0;
+    }
+
+    .format-label {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .format-label small {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
+
+    .advanced-options {
+        margin-bottom: 2rem;
+    }
+
+    .options-details {
+        background: var(--surface-hover);
+        border-radius: var(--border-radius);
+        padding: 1rem;
+    }
+
+    .options-details summary {
+        cursor: pointer;
+        font-weight: 500;
+        margin-bottom: 1rem;
+    }
+
+    .options-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .checkbox-option {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+
+    .subset-options {
+        margin-top: 1rem;
+    }
+
+    .subset-options select,
+    .subset-options textarea {
+        margin-top: 0.5rem;
+        width: 100%;
+    }
+
+    .hero-section {
+        text-align: center;
+        padding: 3rem 0;
+        margin-bottom: 2rem;
+    }
+
+    .hero-title {
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+    }
+
+    .gradient-text {
+        background: linear-gradient(135deg, var(--primary-color), #8ab4f8, #34a853);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .hero-subtitle {
+        font-size: 1.25rem;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .converter-card {
+        background: var(--surface-dark);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow);
+    }
+
+    .card-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .upload-section {
+        margin-bottom: 2rem;
+    }
+
+    .file-input-wrapper {
+        position: relative;
+        margin-bottom: 1rem;
+    }
+
+    .file-input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .file-input-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        padding: 2rem;
+        border: 2px dashed var(--border-color);
+        border-radius: var(--border-radius);
+        background: var(--background-dark);
+        cursor: pointer;
+        transition: var(--transition);
+        text-align: center;
+    }
+
+    .file-input-label:hover {
+        border-color: var(--primary-color);
+        background: var(--surface-hover);
+    }
+
+    .convert-btn {
+        min-width: 200px;
+        font-size: 1.1rem;
+        padding: 1rem 2rem;
+    }
+
+    .spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s ease-in-out infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .result-card {
+        padding: 1.5rem;
+        border-radius: var(--border-radius);
+        margin-bottom: 2rem;
+        border-left: 4px solid;
+    }
+
+    .result-card.success {
+        background: linear-gradient(135deg, rgba(35, 134, 54, 0.1), rgba(35, 134, 54, 0.05));
+        border-left-color: var(--success-color);
+    }
+
+    .result-card.error {
+        background: linear-gradient(135deg, rgba(218, 54, 51, 0.1), rgba(218, 54, 51, 0.05));
+        border-left-color: var(--error-color);
+    }
+
+    .result-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .features-section {
+        margin-top: 3rem;
+    }
+
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .feature-item {
+        text-align: center;
+        padding: 1.5rem;
+        background: var(--surface-dark);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        transition: var(--transition);
+    }
+
+    .feature-item:hover {
+        border-color: var(--primary-color);
+        transform: translateY(-2px);
+    }
+</style>
+
+@code {
+    private IBrowserFile? selectedFile;
+    private string selectedFormat = "woff2";
+    private bool isConverting;
+    private bool enableSubset = false;
+    private bool removeHinting = false;
+    private string characterSet = "latin";
+    private string customCharacters = "";
+    private ConversionResult? conversionResult;
+    private bool showPreview = false;
+    private string previewFontFamily = "";
+
+    // Sistema de notificaciones simple
+    private List<Notification> notifications = new();
+    private int notificationIdCounter = 0;
+
+    public class Notification
+    {
+        public int Id { get; set; }
+        public string Message { get; set; } = "";
+        public string Type { get; set; } = "info"; // success, error, info
+        public bool IsVisible { get; set; } = false;
+    }
+
+    public class FontInfo
+    {
+        public string Name { get; set; } = "";
+        public string Family { get; set; } = "";
+        public int Glyphs { get; set; }
+        public string Format { get; set; } = "";
+    }
+
+    public class ConversionResult
+    {
+        public bool Success { get; set; }
+        public string Error { get; set; } = "";
+        public long InputSize { get; set; }
+        public long OutputSize { get; set; }
+        public string Compression { get; set; } = "";
+        public string OutputFile { get; set; } = "";
+        public FontInfo? FontInfo { get; set; }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        conversionResult = null;
+        showPreview = false;
+    }
+
+    private async Task ConvertFont()
+    {
+        if (selectedFile == null) return;
+
+        isConverting = true;
+        conversionResult = null;
+        showPreview = false;
+
+        try
+        {
+            // Guardar archivo temporal
+            string tempDir = Path.Combine("wwwroot", "temp");
+            Directory.CreateDirectory(tempDir);
+            string inputPath = Path.Combine(tempDir, selectedFile.Name);
+            
+            using (var fileStream = new FileStream(inputPath, FileMode.Create))
+            {
+                await selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(fileStream);
+            }
+
+            // Preparar archivo de salida
+            string fileName = Path.GetFileNameWithoutExtension(selectedFile.Name);
+            string outputFileName = $"{fileName}.{selectedFormat}";
+            string outputPath = Path.Combine("wwwroot", "output", outputFileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+
+            // Obtener tamaño del archivo original
+            long inputSize = new FileInfo(inputPath).Length;
+
+            // Preparar opciones
+            var options = new
+            {
+                subset = enableSubset,
+                remove_hinting = removeHinting,
+                characters = GetCharacterSet()
+            };
+
+            // Ejecutar script Python
+            await RunPythonConverter(inputPath, outputPath, selectedFormat, options, inputSize);
+
+            // Limpiar archivo temporal
+            File.Delete(inputPath);
+        }
+        catch (Exception ex)
+        {
+            conversionResult = new ConversionResult
+            {
+                Success = false,
+                Error = ex.Message
+            };
+            await ShowNotification("Conversion failed: " + ex.Message, "error");
+    
+        }
+        finally
+        {
+            isConverting = false;
+        }
+    }
+
+    private async Task RunPythonConverter(string inputPath, string outputPath, string format, object options, long inputSize)
+    {
+        string optionsJson = JsonSerializer.Serialize(options);
+        string scriptPath = Path.Combine(Directory.GetCurrentDirectory(), "convert_font_enhanced.py");
+        
+        var processInfo = new ProcessStartInfo
+        {
+            FileName = "python",
+            Arguments = $"\"{scriptPath}\" \"{inputPath}\" \"{outputPath}\" \"{format}\" '{optionsJson}'",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(processInfo);
+        string output = await process!.StandardOutput.ReadToEndAsync();
+        string error = await process!.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode == 0)
+        {
+            try
+            {
+                // Parse JSON response
+                using var doc = JsonDocument.Parse(output);
+                var root = doc.RootElement;
+
+                long outputSize = 0;
+                if (File.Exists(outputPath))
+                {
+                    outputSize = new FileInfo(outputPath).Length;
+                }
+
+                conversionResult = new ConversionResult
+                {
+                    Success = root.GetProperty("success").GetBoolean(),
+                    OutputFile = Path.GetFileName(outputPath),
+                    InputSize = inputSize,
+                    OutputSize = outputSize,
+                    Compression = root.TryGetProperty("compression", out var comp) ? comp.GetString() ?? "N/A" : "N/A"
+                };
+
+                // Parse font info if available
+                if (root.TryGetProperty("font_info", out var fontInfoElement))
+                {
+                    conversionResult.FontInfo = new FontInfo
+                    {
+                        Name = fontInfoElement.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
+                        Family = fontInfoElement.TryGetProperty("family", out var family) ? family.GetString() ?? "" : "",
+                        Glyphs = fontInfoElement.TryGetProperty("glyphs", out var glyphs) ? glyphs.GetInt32() : 0,
+                        Format = fontInfoElement.TryGetProperty("format", out var fmt) ? fmt.GetString() ?? "" : ""
+                    };
+                }
+
+                if (conversionResult.Success)
+                {
+                    await ShowNotification("Font converted successfully!", "info");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Fallback si falla el JSON parsing
+                if (File.Exists(outputPath))
+                {
+                    long outputSize = new FileInfo(outputPath).Length;
+                    decimal compressionRatio = inputSize > 0 ? ((decimal)(inputSize - outputSize) / inputSize) * 100 : 0;
+                    
+                    conversionResult = new ConversionResult
+                    {
+                        Success = true,
+                        OutputFile = Path.GetFileName(outputPath),
+                        InputSize = inputSize,
+                        OutputSize = outputSize,
+                        Compression = $"{compressionRatio:F1}%"
+                    };
+                    await ShowNotification("Font converted successfully!", "success");
+
+                }
+                else
+                {
+                    throw new Exception($"Conversion failed: {ex.Message}");
+                }
+            }
+        }
+        else
+        {
+            throw new Exception($"Python script failed: {error}");
+        }
+    }
+
+    private async Task DownloadFile()
+    {
+        if (conversionResult?.Success == true && !string.IsNullOrEmpty(conversionResult.OutputFile))
+        {
+            try
+            {
+                var fileBytes = await File.ReadAllBytesAsync(Path.Combine("wwwroot", "output", conversionResult.OutputFile));
+                var fileName = conversionResult.OutputFile;
+                var mimeType = selectedFormat == "woff2" ? "font/woff2" : "font/woff";
+                
+                await JSRuntime.InvokeVoidAsync("downloadFile", fileName, mimeType, fileBytes);
+                await ShowNotification($"Downloading {fileName}...", "info");
+        
+            }
+            catch (Exception ex)
+            {
+                await ShowNotification($"Download failed: {ex.Message}", "error");                
+            }
+        }
+    }
+
+    private async Task PreviewFont()
+    {
+        if (conversionResult?.Success == true && !string.IsNullOrEmpty(conversionResult.OutputFile))
+        {
+            try
+            {
+                // Generar nombre único para la fuente
+                var fontFileName = conversionResult.OutputFile;
+                var fontPath = $"output/{fontFileName}";
+                var fontName = Path.GetFileNameWithoutExtension(fontFileName);
+                previewFontFamily = $"PreviewFont_{DateTime.Now.Ticks}";
+                
+                // Cargar fuente usando JavaScript
+                await JSRuntime.InvokeVoidAsync("loadFontForPreview", previewFontFamily, fontPath);
+                showPreview = true;
+                
+                await ShowNotification("Font loaded for preview", "info");
+            }
+            catch (Exception ex)
+            {
+                await ShowNotification($"Preview failed: {ex.Message}", "error");
+            }
+        }
+    }
+
+    private void ClosePreview()
+    {
+        showPreview = false;
+    }
+
+    private string GetCharacterSet()
+    {
+        return characterSet switch
+        {
+            "latin" => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ",
+            "latin-extended" => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ0123456789 ",
+            "custom" => customCharacters,
+            _ => ""
+        };
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes == 0) return "0 B";
+        
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal number = bytes;
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+        return $"{number:n1} {suffixes[counter]}";
+    }
+
+    private string GetFontFamilyStyle()
+    {
+        if (string.IsNullOrEmpty(previewFontFamily))
+            return "";
+
+        return $"font-family: '{previewFontFamily}', sans-serif;";
+    }
+
+
+    // Métodos para notificaciones
+    private async Task ShowNotification(string message, string type = "info")
+    {
+        var notification = new Notification
+        {
+            Id = ++notificationIdCounter,
+            Message = message,
+            Type = type
+        };
+
+        notifications.Add(notification);
+        StateHasChanged();
+
+        // Mostrar la notificación con animación
+        await Task.Delay(50);
+        notification.IsVisible = true;
+        StateHasChanged();
+
+        // Auto-remove después de 5 segundos
+        _ = Task.Delay(5000).ContinueWith(async _ =>
+        {
+            await InvokeAsync(() => RemoveNotification(notification.Id));
+        });
+    }
+
+    private void RemoveNotification(int id)
+    {
+        var notification = notifications.FirstOrDefault(n => n.Id == id);
+        if (notification != null)
+        {
+            notification.IsVisible = false;
+            StateHasChanged();
+
+            // Remover después de la animación
+            Task.Delay(300).ContinueWith(_ =>
+            {
+                InvokeAsync(() =>
+                {
+                    notifications.RemoveAll(n => n.Id == id);
+                    StateHasChanged();
+                });
+            });
+        }
+    }
+
+    private string GetNotificationIcon(string type) => type switch
+    {
+        "success" => "✅",
+        "error" => "❌",
+        "info" => "ℹ️",
+        _ => "ℹ️"
+    };
+
+
+}

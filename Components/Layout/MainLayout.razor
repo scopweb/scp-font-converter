@@ -1,0 +1,68 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-container">
+    <!-- Header superior -->
+    <header class="top-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <h1 class="app-title">Wooff2</h1>
+                <span class="app-subtitle">Font Converter</span>
+            </div>
+
+            <nav class="main-nav">
+                <a href="/" class="nav-item @(IsActive("/"))">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-text">Home</span>
+                </a>
+                <a href="/weather" class="nav-item @(IsActive("/contact"))">
+                    <span class="nav-icon">⚡</span>
+                    <span class="nav-text">Conctact</span>
+                </a>  
+            </nav>
+
+            <div class="header-actions">
+                <button class="action-btn" title="Settings">
+                    <span>⚙️</span>
+                </button>
+                <button class="action-btn" title="Help">
+                    <span>❓</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenido principal -->
+    <main class="main-content">
+        <div class="content-wrapper">
+            @Body
+        </div>
+    </main>
+
+    <!-- Footer opcional -->
+    <footer class="app-footer">
+        <div class="footer-content">
+            <span>© 2025 Wooff2 - Professional Font Converter</span>
+            <div class="footer-links">
+                <a href="https://github.com" target="_blank">GitHub</a>
+                <a href="https://docs.microsoft.com/aspnet/core/blazor" target="_blank">Blazor Docs</a>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    <div class="error-content">
+        <span class="error-icon">⚠️</span>
+        <span class="error-text">An unhandled error has occurred.</span>
+        <button class="error-reload" onclick="location.reload()">Reload</button>
+        <button class="error-dismiss">×</button>
+    </div>
+</div>
+
+@code {
+    private string IsActive(string path)
+    {
+        // Simplificado - en una app real usarías NavigationManager
+        return "";
+    }
+}

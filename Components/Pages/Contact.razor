@@ -1,0 +1,247 @@
+@page "/contact"
+@using System.ComponentModel.DataAnnotations
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Contacto</PageTitle>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="contact-header text-center mb-5">
+                <h1 class="display-4 fw-bold text-primary">Contacto</h1>
+                <p class="lead text-muted">¿Tienes alguna pregunta? Nos encantaría escucharte.</p>
+            </div>
+
+            @if (showSuccess)
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <strong>¡Mensaje enviado!</strong> Te responderemos pronto.
+                    <button type="button" class="btn-close" @onclick="() => showSuccess = false"></button>
+                </div>
+            }
+
+            @if (showError)
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong>Error:</strong> @errorMessage
+                    <button type="button" class="btn-close" @onclick="() => showError = false"></button>
+                </div>
+            }
+
+            <div class="card shadow border-0">
+                <div class="card-body p-5">
+                    <EditForm Model="contactForm" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label for="name" class="form-label fw-semibold">Nombre *</label>
+                                <InputText @bind-Value="contactForm.Name" 
+                                          class="form-control form-control-lg" 
+                                          id="name" 
+                                          placeholder="Tu nombre completo" />
+                                <ValidationMessage For="@(() => contactForm.Name)" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="email" class="form-label fw-semibold">Email *</label>
+                                <InputText @bind-Value="contactForm.Email" 
+                                          type="email"
+                                          class="form-control form-control-lg" 
+                                          id="email" 
+                                          placeholder="tu@email.com" />
+                                <ValidationMessage For="@(() => contactForm.Email)" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="col-12">
+                                <label for="subject" class="form-label fw-semibold">Asunto *</label>
+                                <InputText @bind-Value="contactForm.Subject" 
+                                          class="form-control form-control-lg" 
+                                          id="subject" 
+                                          placeholder="¿De qué quieres hablarnos?" />
+                                <ValidationMessage For="@(() => contactForm.Subject)" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="col-12">
+                                <label for="message" class="form-label fw-semibold">Mensaje *</label>
+                                <InputTextArea @bind-Value="contactForm.Message" 
+                                              class="form-control" 
+                                              id="message" 
+                                              rows="6" 
+                                              placeholder="Cuéntanos más detalles..." />
+                                <ValidationMessage For="@(() => contactForm.Message)" class="text-danger small mt-1" />
+                                <div class="form-text">Mínimo 10 caracteres</div>
+                            </div>
+
+                            <!-- Sistema anti-spam: Campo oculto honeypot -->
+                            <div style="position: absolute; left: -9999px;">
+                                <InputText @bind-Value="contactForm.HoneyPot" 
+                                          tabindex="-1" 
+                                          autocomplete="off" />
+                            </div>
+
+                            <!-- Verificación anti-spam simple -->
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Verificación anti-spam *</label>
+                                <div class="row align-items-center">
+                                    <div class="col-auto">
+                                        <span class="fs-5">@mathQuestion</span>
+                                    </div>
+                                    <div class="col-auto">
+                                        <InputNumber @bind-Value="contactForm.MathAnswer" 
+                                                   class="form-control form-control-lg text-center" 
+                                                   style="width: 80px;" 
+                                                   placeholder="?" />
+                                    </div>
+                                </div>
+                                @if (mathAnswerError)
+                                {
+                                    <div class="text-danger small mt-1">Respuesta incorrecta</div>
+                                }
+                            </div>
+
+                            <div class="col-12 text-center">
+                                <button type="submit" class="btn btn-primary btn-lg px-5" disabled="@isSubmitting">
+                                    @if (isSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span>Enviando...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Enviar Mensaje</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ContactFormModel contactForm = new();
+    private bool showSuccess = false;
+    private bool showError = false;
+    private string errorMessage = "";
+    private bool isSubmitting = false;
+    private bool mathAnswerError = false;
+    
+    // Variables para el anti-spam matemático
+    private int mathNum1 = 0;
+    private int mathNum2 = 0;
+    private int correctAnswer = 0;
+    private string mathQuestion = "";
+
+    protected override void OnInitialized()
+    {
+        GenerateNewMathQuestion();
+    }
+
+    private void GenerateNewMathQuestion()
+    {
+        var random = new Random();
+        mathNum1 = random.Next(1, 11);
+        mathNum2 = random.Next(1, 11);
+        correctAnswer = mathNum1 + mathNum2;
+        mathQuestion = $"{mathNum1} + {mathNum2} = ";
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        showError = false;
+        showSuccess = false;
+        mathAnswerError = false;
+
+        try
+        {
+            // Verificación anti-spam: honeypot
+            if (!string.IsNullOrEmpty(contactForm.HoneyPot))
+            {
+                // Bot detectado, fallar silenciosamente
+                await Task.Delay(2000);
+                ResetForm();
+                return;
+            }
+
+            // Verificación anti-spam: matemática
+            if (contactForm.MathAnswer != correctAnswer)
+            {
+                mathAnswerError = true;
+                isSubmitting = false;
+                return;
+            }
+
+            // Verificación de tiempo mínimo (anti-bot)
+            var timeSpent = DateTime.Now - contactForm.StartTime;
+            if (timeSpent.TotalSeconds < 5)
+            {
+                errorMessage = "Por favor, tómate tu tiempo para completar el formulario.";
+                showError = true;
+                isSubmitting = false;
+                return;
+            }
+
+            // Simular envío (aquí integrarías con tu servicio de email)
+            await Task.Delay(1500);
+
+            // Log del mensaje (en producción usar logging real)
+            Console.WriteLine($"Contact form submitted: {contactForm.Name} - {contactForm.Email}");
+
+            showSuccess = true;
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Ocurrió un error inesperado. Inténtalo de nuevo.";
+            showError = true;
+            Console.WriteLine($"Contact form error: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        contactForm = new ContactFormModel();
+        GenerateNewMathQuestion();
+    }
+
+    public class ContactFormModel
+    {
+        public ContactFormModel()
+        {
+            StartTime = DateTime.Now;
+        }
+
+        [Required(ErrorMessage = "El nombre es obligatorio")]
+        [StringLength(100, ErrorMessage = "El nombre no puede superar los 100 caracteres")]
+        public string Name { get; set; } = "";
+
+        [Required(ErrorMessage = "El email es obligatorio")]
+        [EmailAddress(ErrorMessage = "Formato de email inválido")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "El asunto es obligatorio")]
+        [StringLength(200, ErrorMessage = "El asunto no puede superar los 200 caracteres")]
+        public string Subject { get; set; } = "";
+
+        [Required(ErrorMessage = "El mensaje es obligatorio")]
+        [StringLength(2000, MinimumLength = 10, ErrorMessage = "El mensaje debe tener entre 10 y 2000 caracteres")]
+        public string Message { get; set; } = "";
+
+        // Campo honeypot para detectar bots
+        public string HoneyPot { get; set; } = "";
+
+        // Respuesta matemática para verificación
+        public int? MathAnswer { get; set; }
+
+        // Tiempo de inicio para detectar envíos muy rápidos
+        public DateTime StartTime { get; set; }
+    }
+}

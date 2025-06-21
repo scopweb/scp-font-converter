@@ -1,0 +1,235 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <!-- Blazored Toast CSS -->
+    <link rel="stylesheet" href="_content/Blazored.Toast/blazored-toast.min.css" />
+
+    <!-- CSS personalizado de la aplicación -->
+    <link rel="stylesheet" href="app.css" />
+
+    <!-- CSS scoped de componentes Blazor -->
+    <link rel="stylesheet" href="Wooff2.styles.css" />
+
+    <ImportMap />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <ReconnectModal />
+
+    <!-- Blazor Framework JavaScript -->
+    <script src="_framework/blazor.web.js"></script>
+
+    <!-- Bootstrap JavaScript (opcional, solo si necesitas componentes interactivos) -->
+    <script src="lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scripts para descarga segura y preview -->
+    <script>
+        // Función para descargar archivos de forma segura
+        window.downloadFile = (fileName, mimeType, fileBytes) => {
+            try {
+                // Crear blob con los datos del archivo
+                const blob = new Blob([new Uint8Array(fileBytes)], { type: mimeType });
+
+                // Crear URL temporal
+                const url = window.URL.createObjectURL(blob);
+
+                // Crear elemento <a> temporal para descarga
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                link.style.display = 'none';
+
+                // Agregar al DOM, hacer clic y remover
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Limpiar URL temporal después de un delay
+                setTimeout(() => {
+                    window.URL.revokeObjectURL(url);
+                }, 100);
+
+                console.log(`Download initiated: ${fileName}`);
+            } catch (error) {
+                console.error('Download failed:', error);
+                alert('Download failed: ' + error.message);
+            }
+        };
+
+        // Función para cargar fuente para preview
+        window.loadFontForPreview = async (fontFamily, fontPath) => {
+            try {
+                // Crear definición CSS para la fuente
+                const fontFace = new FontFace(fontFamily, `url(${fontPath})`);
+
+                // Cargar la fuente
+                await fontFace.load();
+
+                // Agregar la fuente al documento
+                document.fonts.add(fontFace);
+
+                console.log(`Font loaded for preview: ${fontFamily}`);
+            } catch (error) {
+                console.error('Font preview failed:', error);
+                alert('Font preview failed: ' + error.message);
+            }
+        };
+
+        // Función para limpiar fuentes temporales (opcional)
+        window.cleanupPreviewFonts = () => {
+            // Remover fuentes temporales que empiecen con "PreviewFont_"
+            for (let font of document.fonts) {
+                if (font.family.startsWith('PreviewFont_')) {
+                    document.fonts.delete(font);
+                }
+            }
+        };
+
+        // Mejorar drag & drop para el input de archivo
+        window.initializeDragDrop = () => {
+            const dropZone = document.querySelector('.file-input-label');
+            if (!dropZone) return;
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight(e) {
+                dropZone.classList.add('drag-over');
+            }
+
+            function unhighlight(e) {
+                dropZone.classList.remove('drag-over');
+            }
+
+            dropZone.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+
+                if (files.length > 0) {
+                    const fileInput = document.getElementById('fontFile');
+                    if (fileInput) {
+                        // Simular selección de archivo
+                        fileInput.files = files;
+                        // Disparar evento change
+                        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            }
+        };
+
+        // Inicializar cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', () => {
+            window.initializeDragDrop();
+        });
+
+        // Reinicializar después de updates de Blazor
+        window.addEventListener('blazor:enhancedload', () => {
+            window.initializeDragDrop();
+        });
+    </script>
+
+    <style>
+        /* Estilos adicionales para drag & drop */
+        .file-input-label.drag-over {
+            border-color: var(--primary-color) !important;
+            background-color: rgba(66, 133, 244, 0.1) !important;
+            transform: scale(1.02);
+        }
+
+        .file-input-label {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Animación para el spinner */
+        @@keyframes pulse {
+            0%, 100%
+
+        {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.5;
+        }
+
+        }
+
+        .converting .convert-btn {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* Estilos para botones de descarga */
+        .download-section {
+            animation: slideInUp 0.5s ease-out;
+        }
+
+        @@keyframes slideInUp {
+            from
+
+        {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        }
+
+        /* Responsive mejorado */
+        @@media (max-width: 768px) {
+            .download-section
+
+        {
+            flex-direction: column;
+        }
+
+        .download-btn,
+        .preview-btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .format-selector {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .format-option {
+            justify-content: center;
+        }
+
+        }
+    </style>
+</body>
+
+</html>
