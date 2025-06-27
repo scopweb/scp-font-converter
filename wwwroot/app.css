@@ -437,6 +437,6 @@ p {
     margin-top: 0.5rem;
 }
 
-small.text-muted{
-    color: #8b949e;
+small.text-muted, form > label.form-label, .lead.text-muted, .form-text, form, .form-control:focus {
+    color: rgba(149, 168, 187, 0.75) !important;
 }
